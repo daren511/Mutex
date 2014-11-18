@@ -9,6 +9,8 @@ namespace Alternance
 {
     class Program
     {
+        const int TIMER_LIMIT = 20;
+        const int SLAVE_START_TIME = 5;
         static int timer = 0;
         static Mutex Alternance = new Mutex();
         static bool tourMaster = true;
@@ -17,14 +19,13 @@ namespace Alternance
         static bool traiterMaster = false;
         static bool traiterSlave = false; 
         static Mutex m = new Mutex();
+        static Thread master = new Thread(Master);
+        static Thread slave = new Thread(Slave);
         static void Main(string[] args)
         {
             new Thread(Timer).Start();
-            Thread master = new Thread(Master);
-            Thread slave = new Thread(Slave);
-            master.Start();
-            slave.Start();
 
+            master.Start();
         }
 
         static void Timer()
@@ -40,8 +41,13 @@ namespace Alternance
 
         static void Master()
         {
-            while (timer != 60)
+
+            while (timer != TIMER_LIMIT)
             {
+                if (timer == SLAVE_START_TIME && !slave.IsAlive)
+                {
+                    slave.Start();
+                }
                 m.WaitOne();
                 if ((timer % delaiMaster) == 0 && estEnConflit() && !traiterMaster)
                 {
@@ -73,7 +79,7 @@ namespace Alternance
 
         static void Slave()
         {
-            while (timer != 60)
+            while (timer != TIMER_LIMIT)
             {
                 m.WaitOne();
                 if ((timer % delaiSlave) == 0 && estEnConflit() && !traiterSlave)
