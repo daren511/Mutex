@@ -11,20 +11,29 @@ namespace Alternance
     {
         static int timer = 0;
         static Mutex Alternance = new Mutex();
-        static bool tourMaster = true;
         static int delaiMaster = 3;
-        static int delaiSlave = 2;
+        static int delaiSlave = 3;
+        static int tour = 0;
         static bool traiterMaster = false;
-        static bool traiterSlave = false; 
-        static Mutex m = new Mutex();
+        static bool traiterSlave = false;
+        static Mutex MutexTimer = new Mutex();
         static void Main(string[] args)
         {
-            new Thread(Timer).Start();
-            Thread master = new Thread(Master);
-            Thread slave = new Thread(Slave);
-            master.Start();
-            slave.Start();
+            try
+            {
+                new Thread(Timer).Start();
+                Thread master = new Thread(Master);
+                Thread slave = new Thread(Slave);
+                
+                master.Start();
+                System.Threading.Thread.Sleep(15);
+                slave.Start();
 
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         static void Timer()
@@ -32,73 +41,85 @@ namespace Alternance
             while(true)
             {
                 Thread.Sleep(1000);
+                MutexTimer.WaitOne();
                 timer++;
                  traiterMaster = false;
                  traiterSlave = false;
+                 MutexTimer.ReleaseMutex();
             }
         }
 
         static void Master()
         {
+            Alternance.WaitOne();
             while (timer != 60)
             {
-                m.WaitOne();
-                if ((timer % delaiMaster) == 0 && estEnConflit() && !traiterMaster)
+                MutexTimer.WaitOne();
+                bool traiter = traiterMaster;
+                int timerlocal = timer;
+                MutexTimer.ReleaseMutex();
+                if ((timerlocal % delaiMaster) == 0 && estEnConflit() && !traiter)
                 {
-                    Alternance.WaitOne();
-                    if (tourMaster)
+                    if (tour % 2 != 0)
                     {
-                        
-                        Console.WriteLine("Master Thread : Temps passé " + timer + " secondes CONFLIT");
-                        Alternance.ReleaseMutex();
-                        tourMaster = false;
+                        Alternance.WaitOne();
+                        Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes pris et ecris");
+                        tour++;
+                        traiterMaster = true;
                     }
                     else
                     {
+                      
+                        Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes ecris et release ");
                         Alternance.ReleaseMutex();
-                        Alternance.WaitOne();
-                        Console.WriteLine("Master Thread : Temps passé " + timer + " secondes CONFLIT");
-                        Alternance.ReleaseMutex();
+                        
+                        traiterMaster = true;                        
                     }
-                    traiterMaster = true;
+                   
                 }
-                else if ((timer % delaiMaster) == 0 && !traiterMaster)
+                else if ((timerlocal % delaiMaster) == 0 && !traiter)
                 {
-                    Console.WriteLine("Master Thread : Temps passé " + timer + " secondes");
+                    Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes");
                     traiterMaster = true;
                 }
-                m.ReleaseMutex();
+                
             }
         }
 
         static void Slave()
         {
+            
             while (timer != 60)
             {
-                m.WaitOne();
-                if ((timer % delaiSlave) == 0 && estEnConflit() && !traiterSlave)
+                MutexTimer.WaitOne();
+                bool traiter = traiterSlave;
+                int timerlocal = timer;
+                MutexTimer.ReleaseMutex();
+
+                if ((timerlocal % delaiSlave) == 0 && estEnConflit() && !traiter)
                 {
-                    if (tourMaster)
+                    if (tour % 2 == 0 )
                     {
                         Alternance.WaitOne();
-                        Console.WriteLine("Slave Thread : Temps passé " + timer + " secondes CONFLIT");
-                        Alternance.ReleaseMutex();
+                        Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes pris et ecris");
+                         tour++;
+                        traiterSlave = true;
+                       
                     }
                     else
                     {
-                        Alternance.WaitOne();
-                        Console.WriteLine("Slave Thread : Temps passé " + timer + " secondes CONFLIT");
+                       
+                        Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes ecris et release ");
                         Alternance.ReleaseMutex();
-                        tourMaster = true;
+                        traiterSlave = true;
                     }
-                    traiterSlave = true;
                 }
-                else if ((timer % delaiSlave) == 0 && !traiterSlave)
+                else if ((timerlocal % delaiSlave) == 0 && !traiter)
                 {
-                    Console.WriteLine("Slave Thread : Temps passé " + timer + " secondes");
+                    Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes");
                     traiterSlave = true;
                 }
-                m.ReleaseMutex();
+                
             }
         }
         static bool estEnConflit()
