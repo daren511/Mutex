@@ -11,17 +11,23 @@ namespace Alternance
     class Program
     {
         //---------- VARIABLES ----------//
+        // Int
         static int timer = 0;
-        static Mutex Alternance = new Mutex();
         static int delaiMaster = 3;
         static int delaiSlave = 3;
         static int tour = 0;
+        static int tempsCreationSlave = 5;
+        // Bool
         static bool traiterMaster = false;
         static bool traiterSlave = false;
-        static Mutex MutexTimer = new Mutex();
-        static Thread slave;
         static bool slaveDemarrer = false;
-        static int tempsNavigation = 60;
+        // Mutex
+        static Mutex Alternance = new Mutex();
+        static Mutex MutexTimer = new Mutex();
+        // Thread
+        static Thread master;
+        static Thread slave;
+        // Textwriter
         static TextWriter tx = new StreamWriter("log.txt", true);
 
 
@@ -29,6 +35,7 @@ namespace Alternance
         {
             try
             {
+                // Entrée du temps d'intervalles pour le Slave Thread dans la console
                 Console.Write("Entrez le temps d'intervalles du thread slave: ");
                 string line = Console.ReadLine();
                 while (!int.TryParse(line, out delaiSlave))
@@ -38,18 +45,22 @@ namespace Alternance
                 }
                 tx.WriteLine("Entrez un chiffre pour le delai: " + line);
 
-                Console.Write("Entrez le temps de navigation: ");
+                // Entrée du temps d'attente pour la création du Slave Thread dans la console
+                Console.Write("Entrez le temps d'attente de création du slave: ");
                 line = Console.ReadLine();
-                while (!int.TryParse(line, out tempsNavigation))
+                while (!int.TryParse(line, out tempsCreationSlave))
                 {
-                    Console.Write("Entrez un chiffre pour le temps de navigation: ");
+                    Console.Write("Entrez un chiffre pour le temps de création: ");
                     line = Console.ReadLine();
                 }
                 tx.WriteLine("Entrez le temps de navigation: " + line);
                 tx.WriteLine("--------------------------------------");
 
+                // Début du Timer
                 new Thread(Timer).Start();
-                Thread master = new Thread(Master);
+
+                // Début du Master Thread
+                master = new Thread(Master);
                 master.Start();
             }
             catch (Exception e)
@@ -58,117 +69,155 @@ namespace Alternance
             }
         }
 
+        /// <summary>
+        /// Timer qui compte les secondes utilisées par les deux Threads
+        /// </summary>
         static void Timer()
         {
             while (true)
             {
                 Thread.Sleep(1000);
-                MutexTimer.WaitOne();
+                MutexTimer.WaitOne();   // Bloque juqu'à ce qu'il reçoit un signal 
                 timer++;
                 traiterMaster = false;
                 traiterSlave = false;
-                MutexTimer.ReleaseMutex();
+                MutexTimer.ReleaseMutex();  // Libère le mutex
             }
         }
 
+        /// <summary>
+        /// Effectue l'écriture et tout autre traitement pour le Master Thread
+        /// </summary>
         static void Master()
         {
-            Alternance.WaitOne();
-            while (timer != tempsNavigation)
+            Alternance.WaitOne();   // Bloque juqu'à ce qu'il reçoit un signal
+            while (timer != 30)
             {
-                MutexTimer.WaitOne();
+                MutexTimer.WaitOne();   // Bloque juqu'à ce qu'il reçoit un signal
                 bool traiter = traiterMaster;
                 int timerlocal = timer;
-                MutexTimer.ReleaseMutex();
-                if (timerlocal == 5 && !slaveDemarrer)
+                MutexTimer.ReleaseMutex();  // Libère le Mutex
+
+                // Si c'est maintenant le temps que l'usager a entré dans la console
+                if (timerlocal == tempsCreationSlave && !slaveDemarrer)
                 {
+                    // Crée et démarre le Slave Thread
                     slave = new Thread(Slave);
                     slave.Start();
                     slaveDemarrer = true;
                 }
 
+                // S'il y a un conflit entre les 2 Threads
                 if ((timerlocal % delaiMaster) == 0 && estEnConflit() && !traiter)
                 {
+                    // Si le tour est impair
                     if (tour % 2 != 0)
                     {
-                        Alternance.WaitOne();
+                        Alternance.WaitOne();   // Bloque juqu'à ce qu'il reçoit un signal 
+                        // Écriture dans la console et le fichier texte
+                        tx.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes pris et écris");
+                        Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes pris et écris");
 
-                        tx.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes pris et ecris");
-                        Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes pris et ecris");
-
-                        //Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes pris et ecris");
                         tour++;
                         traiterMaster = true;
                     }
                     else
                     {
-                        tx.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes ecris et release ");
-                        Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes ecris et release ");
-                        Alternance.ReleaseMutex();
+                        // Écriture dans la console et le fichier texte
+                        tx.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes écris et release ");
+                        Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes écris et release ");
 
+                        Alternance.ReleaseMutex();
                         traiterMaster = true;
                     }
-
                 }
+                // Si le thread n'est pas traité et que le délai est un diviseur du timer
                 else if ((timerlocal % delaiMaster) == 0 && !traiter)
                 {
+                    // Écriture dans la console et le fichier texte
                     tx.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes");
                     Console.WriteLine("Master Thread : Temps passé " + timerlocal + " secondes");
                     traiterMaster = true;
                 }
             }
+
             while (slave.IsAlive)
             {
-                // Attend que le Slave Thread meurt avant de tuer le Master Thread
+                // Attendre que le Slave Thread se termine
             }
+
+            // Écriture dans la console et le fichier texte
             tx.WriteLine("Master Thread : terminé");
             Console.WriteLine("Master Thread : terminé");
+
             tx.WriteLine("Fin du programme");
             Console.WriteLine("Fin du programme");
+
             tx.WriteLine("--------------------------------------");
             tx.WriteLine("--------------------------------------");
+            // Fermeture du TextWriter
             tx.Close();
         }
 
+        /// <summary>
+        /// Effectue l'écriture et tout autre traitement pour le Slave Thread
+        /// </summary>
         static void Slave()
         {
+            // Écriture dans la console et le fichier texte
             tx.WriteLine("Création du Slave Thread");
             Console.WriteLine("Création du Slave Thread");
-            while (timer != tempsNavigation)
+            while (timer != 30)
             {
-                MutexTimer.WaitOne();
+                MutexTimer.WaitOne();   // Bloque juqu'à ce qu'il reçoit un signal 
                 bool traiter = traiterSlave;
                 int timerlocal = timer;
-                MutexTimer.ReleaseMutex();
+                MutexTimer.ReleaseMutex();  // Libère le Mutex
 
+                // S'il y a un conflit entre les 2 Threads
                 if ((timerlocal % delaiSlave) == 0 && estEnConflit() && !traiter)
                 {
+                    // Si le tour est impair
                     if (tour % 2 == 0)
                     {
-                        Alternance.WaitOne();
-                        tx.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes pris et ecris");
-                        Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes pris et ecris");
+                        Alternance.WaitOne();   // Bloque juqu'à ce qu'il reçoit un signal 
+                        // Écriture dans la console et le fichier texte
+                        tx.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes pris et écris");
+                        Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes pris et écris");
+
                         tour++;
                         traiterSlave = true;
                     }
                     else
                     {
-                        tx.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes ecris et release ");
-                        Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes ecris et release ");
+                        // Écriture dans la console et le fichier texte
+                        tx.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes écris et release ");
+                        Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes écris et release ");
                         Alternance.ReleaseMutex();
                         traiterSlave = true;
                     }
                 }
+                // Si le thread n'est pas traité et que le délai est un diviseur du timer
                 else if ((timerlocal % delaiSlave) == 0 && !traiter)
                 {
+                    // Écriture dans la console et le fichier texte
                     tx.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes");
                     Console.WriteLine("Slave Thread : Temps passé " + timerlocal + " secondes");
                     traiterSlave = true;
                 }
+                // Tue le Thread si le Master Thread est mort
+                if (!master.IsAlive)
+                    slave.Abort();
             }
+            // Écriture dans la console et le fichier texte
             tx.WriteLine("Slave Thread : terminé");
             Console.WriteLine("Slave Thread : terminé");
         }
+
+        /// <summary>
+        /// Vérifie s'il y a un conflit entre les 2 Threads
+        /// </summary>
+        /// <returns>Retourne true s'il n'y a aucun conflit</returns>
         static bool estEnConflit()
         {
             return ((timer % delaiMaster) == 0) && ((timer % delaiSlave) == 0) && slaveDemarrer;
